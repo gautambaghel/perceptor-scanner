@@ -22,14 +22,115 @@ under the License.
 package scanner
 
 import (
+	"crypto/tls"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/blackducksoftware/hub-client-go/hubclient"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 )
+
+// DownloadDIClient tries to download the Docker Inspector client
+func DownloadDIClient(osType OSType, cliRootPath string, hubScheme string, hubHost string, hubUser string, hubPassword string, hubPort int, timeout time.Duration, baseRepoURL string, dIVersionConstant string) (*DockerInspectorInfo, error) {
+
+	// ALL THIS TO GET THE HUB VERSION - NEEDED TO FIND JAVA THAT CAME WITH SCAN CLI
+	// 1. instantiate hub client
+	hubBaseURL := fmt.Sprintf("%s://%s:%d", hubScheme, hubHost, hubPort)
+	hubClient, err := hubclient.NewWithSession(hubBaseURL, hubclient.HubClientDebugTimings, timeout)
+	if err != nil {
+		return nil, errors.Annotatef(err, "unable to instantiate hub client")
+	}
+
+	log.Infof("successfully instantiated hub client %s", hubBaseURL)
+
+	// 2. log in to hub client
+	err = hubClient.Login(hubUser, hubPassword)
+	if err != nil {
+		return nil, errors.Annotatef(err, "unable to log in to hub")
+	}
+
+	log.Info("successfully logged in to hub")
+
+	// 3. get hub version
+	currentVersion, err := hubClient.CurrentVersion()
+	if err != nil {
+		return nil, errors.Annotatef(err, "unable to get hub version")
+	}
+
+	log.Infof("got hub version: %s", currentVersion.Version)
+
+	// 4. ping artifactory to get latest DI
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	client := &http.Client{Transport: tr}
+
+	url = fmt.Sprintf("https://%s/api/storage/bds-integrations-release/com/synopsys/integration/blackduck-docker-inspector?properties=%s", baseRepoURL, dIVersionConstant)
+
+	log.Infof("DI: Trying to get the latest docker inspector from ", url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Error in pinging artifactory server %e", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+	pingResponseString := ""
+	if resp.StatusCode == http.StatusOK {
+		respBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		pingResponseString = string(respBytes)
+	} else {
+		return nil, errors.New("Docker Inspector ping response not OK")
+	}
+
+	// 5. Extract Jar URL info from response
+	jarURL := ""
+	if pingResponseString != "" {
+		// remove space
+		noSpaceRespStr := strings.Join(strings.Fields(pingResponseString), "")
+
+		// extract jar url
+		re := regexp.MustCompile(`\[([^\[\]]*)\]`)
+		submatchall := re.FindAllString(noSpaceRespStr, -1)
+		for _, jarURL = range submatchall {
+			jarURL = strings.Trim(jarURL, "[")
+			jarURL = strings.Trim(jarURL, "]")
+		}
+
+		// remove quotes
+		jarURL = jarURL[1 : len(jarURL)-1]
+	}
+
+	log.Infof("DI: Latest version of docker inspector downloading from ", jarURL)
+	// 6. Download DI Jar file
+	diInfo := NewDockerInspectorInfo(baseRepoURL, dIVersionConstant, cliRootPath, currentVersion.Version)
+	err = os.MkdirAll(cliInfo.RootPath, 0755)
+	if err != nil {
+		return nil, errors.Annotatef(err, "unable to make dir for DI %s", cliInfo.RootPath)
+	}
+
+	if jarURL == "" {
+		return nil, errors.New("Docker Inspector Jar URL is empty, something went wrong while retieving DI jar URL")
+	}
+
+	downloadPath := diInfo.DockerInspectorJarPath()
+	log.Infof("DI: Storing jar at ", downloadPath)
+	downloadDIJar(downloadPath, jarURL)
+
+	// 7. we're done
+	return cliInfo, nil
+}
 
 // DownloadScanClient downloads the Black Duck scan client
 func DownloadScanClient(osType OSType, cliRootPath string, hubScheme string, hubHost string, hubUser string, hubPassword string, hubPort int, timeout time.Duration) (*ScanClientInfo, error) {
@@ -88,4 +189,25 @@ func DownloadScanClient(osType OSType, cliRootPath string, hubScheme string, hub
 
 	// 7. we're done
 	return cliInfo, nil
+}
+
+func downloadDIJar(filepath string, url string) error {
+
+	// Get the data
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Create the file
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	return err
 }

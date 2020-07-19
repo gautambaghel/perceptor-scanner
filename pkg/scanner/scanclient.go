@@ -40,8 +40,9 @@ type ScanClientInterface interface {
 // ScanClient implements ScanClientInterface using
 // the Black Duck hub and scan client programs.
 type ScanClient struct {
-	tlsVerification bool
-	scanClientInfo  *ScanClientInfo
+	tlsVerification     bool
+	scanClientInfo      *ScanClientInfo
+	dockerInspectorInfo *DockerInspectorInfo
 }
 
 // NewScanClient requires hub login credentials
@@ -72,6 +73,67 @@ func (sc *ScanClient) ensureScanClientIsDownloaded(scheme string, host string, p
 	return nil
 }
 
+// ensureDockerInspectorIsDownloaded will make sure that the Black Duck Docker Inspector is Downloaded for scanning
+func (sc *ScanClient) ensureDockerInspectorIsDownloaded(scheme string, host string, port int, username string, password string) error {
+	if sc.dockerInspectorInfo != nil {
+		return nil
+	}
+	cliRootPath := "/tmp/scanner"
+	dockerInspectorInfo, err := DownloadDIClient(
+		OSTypeLinux,
+		cliRootPath,
+		scheme,
+		host,
+		username,
+		password,
+		port,
+		time.Duration(300)*time.Second,
+		"sig-repo.synopsys.com",
+		"DOCKER_INSPECTOR_LATEST_9")
+	if err != nil {
+		return errors.Annotate(err, "unable to download DI")
+	}
+	sc.dockerInspectorInfo = dockerInspectorInfo
+	return nil
+}
+
+func (sc *ScanClient) runDockerInspector(scheme string, host string, port int, username string, password string, path string, projectName string, versionName string, scanName string) {
+	startTotal := time.Now()
+	dockerInspectorJarPath := sc.dockerInspectorInfo.DockerInspectorJarPath()
+	dockerInspectorJavaPath := sc.dockerInspectorInfo.DockerInspectorJavaPath()
+
+	blackDuckURL := fmt.Sprintf(scheme, host, port)
+	cmd := exec.Command(dockerInspectorJavaPath,
+		"-Xms512m",
+		"-Xmx4096m",
+		"-Done-jar.silent=true",
+		"-jar", dockerInspectorJarPath,
+		"--blackduck.url="+blackDuckURL,
+		"--blackduck.username="+username,
+		"--blackduck.project.name"+projectName,
+		"--blackduck.project.version"+versionName,
+		sc.getTLSVerification(),
+		"-v",
+		"--docker.tar="+path)
+	log.Infof("running command %+v for path %s\n", cmd, path)
+	cmd.Env = append(cmd.Env, fmt.Sprintf("BD_HUB_PASSWORD=%s", password))
+
+	startScanClient := time.Now()
+	stdoutStderr, err := cmd.CombinedOutput()
+
+	recordScanClientDuration(time.Now().Sub(startScanClient), err == nil)
+	recordTotalScannerDuration(time.Now().Sub(startTotal), err == nil)
+
+	if err != nil {
+		recordScannerError("docker inpector failed")
+		log.Errorf("docker inspector scanner failed for path %s with error %s and output:\n%s\n", path, err.Error(), string(stdoutStderr))
+		return errors.Trace(err)
+	}
+	log.Infof("successfully completed docker inspector for path %s", path)
+	log.Debugf("output from path %s: %s", path, stdoutStderr)
+	return nil
+}
+
 // getTLSVerification return the TLS verfiication of the Black Duck host
 func (sc *ScanClient) getTLSVerification() string {
 	if sc.tlsVerification {
@@ -85,6 +147,12 @@ func (sc *ScanClient) Scan(scheme string, host string, port int, username string
 	if err := sc.ensureScanClientIsDownloaded(scheme, host, port, username, password); err != nil {
 		return errors.Annotate(err, "cannot run scan cli")
 	}
+	if err := sc.ensureDockerInspectorIsDownloaded(scheme, host, port, username, password); err != nil {
+		log.Debugf("Cannot run DI ", err)
+	} else {
+		go sc.runDockerInspector(scheme, host, port, username, password, path, projectName, versionName)
+	}
+
 	startTotal := time.Now()
 
 	scanCliImplJarPath := sc.scanClientInfo.ScanCliImplJarPath()
