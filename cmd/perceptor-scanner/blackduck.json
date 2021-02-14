@@ -1,0 +1,10 @@
+[
+  {
+    "scheme": "https",
+    "domain": "blackduck.apps.bizdev.synopsys-alliances.com",
+    "port": 443,
+    "user": "sysadmin",
+    "password": "blackduck",
+    "concurrentScanLimit": 3
+  }
+]

@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/blackducksoftware/perceptor/pkg/api"
-	resty "github.com/go-resty/resty"
 	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
+	resty "gopkg.in/resty.v1"
 )
 
 const (

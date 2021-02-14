@@ -32,7 +32,7 @@ import (
 
 // ScanClientInterface ...
 type ScanClientInterface interface {
-	Scan(scheme string, host string, port int, username string, password string, path string, projectName string, versionName string, scanName string) error
+	Scan(scheme string, host string, port int, username string, password string, path string, projectName string, versionName string, scanName string, imageDirectory string) error
 	//ScanCliSh(job ScanJob) error
 	//ScanDockerSh(job ScanJob) error
 }
@@ -97,12 +97,12 @@ func (sc *ScanClient) ensureDockerInspectorIsDownloaded(scheme string, host stri
 	return nil
 }
 
-func (sc *ScanClient) runDockerInspector(scheme string, host string, port int, username string, password string, path string, projectName string, versionName string, scanName string) {
+func (sc *ScanClient) runDockerInspector(scheme string, host string, port int, username string, password string, path string, projectName string, versionName string, imageDirectory string) error {
 	startTotal := time.Now()
 	dockerInspectorJarPath := sc.dockerInspectorInfo.DockerInspectorJarPath()
 	dockerInspectorJavaPath := sc.dockerInspectorInfo.DockerInspectorJavaPath()
 
-	blackDuckURL := fmt.Sprintf(scheme, host, port)
+	blackDuckURL := fmt.Sprintf("%s://%s:%d", scheme, host, port)
 	cmd := exec.Command(dockerInspectorJavaPath,
 		"-Xms512m",
 		"-Xmx4096m",
@@ -110,12 +110,18 @@ func (sc *ScanClient) runDockerInspector(scheme string, host string, port int, u
 		"-jar", dockerInspectorJarPath,
 		"--blackduck.url="+blackDuckURL,
 		"--blackduck.username="+username,
-		"--blackduck.project.name"+projectName,
-		"--blackduck.project.version"+versionName,
-		sc.getTLSVerification(),
-		"-v",
+		"--blackduck.project.name="+projectName,
+		"--blackduck.project.version="+versionName,
+		"--blackduck.always.trust.cert="+sc.automaticallyTrustCert(),
+		"--imageinspector.service.start=false",
+		"--imageinspector.service.url=http://localhost:8080",
+		"--imageinspector.service.port.alpine=8080",
+		"--imageinspector.service.port.centos=8081",
+		"--imageinspector.service.port.ubuntu=8082",
+		"--shared.dir.path.imageinspector="+imageDirectory,
+		"--shared.dir.path.local="+imageDirectory,
 		"--docker.tar="+path)
-	log.Infof("running command %+v for path %s\n", cmd, path)
+	log.Infof("DI: running command %+v", cmd)
 	cmd.Env = append(cmd.Env, fmt.Sprintf("BD_HUB_PASSWORD=%s", password))
 
 	startScanClient := time.Now()
@@ -125,13 +131,21 @@ func (sc *ScanClient) runDockerInspector(scheme string, host string, port int, u
 	recordTotalScannerDuration(time.Now().Sub(startTotal), err == nil)
 
 	if err != nil {
-		recordScannerError("docker inpector failed")
-		log.Errorf("docker inspector scanner failed for path %s with error %s and output:\n%s\n", path, err.Error(), string(stdoutStderr))
+		recordScannerError("DI: docker inpector failed")
+		log.Errorf("DI: docker inspector scanner failed for path %s with error %s and output:\n%s\n", path, err.Error(), string(stdoutStderr))
 		return errors.Trace(err)
 	}
-	log.Infof("successfully completed docker inspector for path %s", path)
-	log.Debugf("output from path %s: %s", path, stdoutStderr)
+	log.Infof("DI: successfully completed docker inspector for path %s", path)
+	log.Debugf("DI: output from path %s: %s", path, stdoutStderr)
 	return nil
+}
+
+func (sc *ScanClient) automaticallyTrustCert() string {
+	if sc.tlsVerification {
+		return "false"
+	}
+
+	return "true"
 }
 
 // getTLSVerification return the TLS verfiication of the Black Duck host
@@ -143,14 +157,15 @@ func (sc *ScanClient) getTLSVerification() string {
 }
 
 // Scan executes the Black Duck scan for the input artifact
-func (sc *ScanClient) Scan(scheme string, host string, port int, username string, password string, path string, projectName string, versionName string, scanName string) error {
+func (sc *ScanClient) Scan(scheme string, host string, port int, username string, password string, path string, projectName string, versionName string, scanName string, imageDirectory string) error {
 	if err := sc.ensureScanClientIsDownloaded(scheme, host, port, username, password); err != nil {
 		return errors.Annotate(err, "cannot run scan cli")
 	}
 	if err := sc.ensureDockerInspectorIsDownloaded(scheme, host, port, username, password); err != nil {
-		log.Debugf("Cannot run DI ", err)
+		log.Debugf("DI: Cannot download/run Docker Inspector ", err)
 	} else {
-		go sc.runDockerInspector(scheme, host, port, username, password, path, projectName, versionName)
+		// can't run in a separate channel, failing as file is cleaned before it's scanned
+		sc.runDockerInspector(scheme, host, port, username, password, path, projectName, versionName, imageDirectory)
 	}
 
 	startTotal := time.Now()

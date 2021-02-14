@@ -1,0 +1,175 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  selfLink: /apis/apps/v1/namespaces/connector/deployments/connector-opssight-scanner
+  name: connector-opssight-scanner
+  namespace: connector
+  labels:
+    app: opssight
+    component: scanner
+    name: connector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opssight
+      component: scanner
+      name: connector
+  template:
+    metadata:
+      name: connector-opssight-scanner
+      labels:
+        app: opssight
+        component: scanner
+        name: connector
+    spec:
+      restartPolicy: Always
+      serviceAccountName: connector-opssight-image-getter
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 30
+      securityContext: {}
+      containers:
+        - resources:
+            requests:
+              cpu: 300m
+              memory: 1300Mi
+          terminationMessagePath: /dev/termination-log
+          name: scanner
+          command:
+            - ./opssight-scanner
+          securityContext:
+            privileged: false
+          ports:
+            - containerPort: 3003
+              protocol: TCP
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: scanner
+              mountPath: /etc/scanner
+            - name: var-images
+              mountPath: /var/images
+          terminationMessagePolicy: File
+          envFrom:
+            - secretRef:
+                name: connector-opssight-blackduck
+          image: 'docker.io/gautambaghel/opssight-scanner:2.2.5'
+          args:
+            - /etc/scanner/opssight.json
+        - resources:
+            requests:
+              cpu: 300m
+              memory: 1300Mi
+          terminationMessagePath: /dev/termination-log
+          name: image-getter
+          command:
+            - ./opssight-image-getter
+          securityContext:
+            privileged: false
+          ports:
+            - containerPort: 3004
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: image-getter
+              mountPath: /etc/image-getter
+            - name: var-images
+              mountPath: /var/images
+          terminationMessagePolicy: File
+          envFrom:
+            - secretRef:
+                name: connector-opssight-blackduck
+          image: 'docker.io/blackducksoftware/opssight-image-getter:2.2.5'
+          args:
+            - /etc/image-getter/opssight.json
+        - resources:
+            requests:
+              cpu: 300m
+              memory: 1Gi
+            limits:
+              memory: 1Gi
+          terminationMessagePath: /dev/termination-log
+          name: imageinspector-alpine
+          command: ["java"]
+          args: ["-jar", "/opt/blackduck/blackduck-imageinspector/blackduck-imageinspector.jar", "--server.port=8080", "--current.linux.distro=alpine", "--inspector.port.alpine=8080", "--inspector.port.centos=8081", "--inspector.port.ubuntu=8082"]
+          securityContext:
+            privileged: false
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: var-images
+              mountPath: /var/images
+          terminationMessagePolicy: File
+          envFrom:
+            - secretRef:
+                name: connector-opssight-blackduck
+          image: 'blackducksoftware/blackduck-imageinspector-alpine:5.0.1'
+        - resources:
+            requests:
+              cpu: 300m
+              memory: 1Gi
+            limits:
+              memory: 1Gi
+          terminationMessagePath: /dev/termination-log
+          name: imageinspector-centos
+          command: ["java"]
+          args: ["-jar", "/opt/blackduck/blackduck-imageinspector/blackduck-imageinspector.jar", "--server.port=8081", "--current.linux.distro=centos", "--inspector.port.alpine=8080", "--inspector.port.centos=8081", "--inspector.port.ubuntu=8082"]
+          securityContext:
+            privileged: false
+          ports:
+            - containerPort: 8081
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: var-images
+              mountPath: /var/images
+          terminationMessagePolicy: File
+          envFrom:
+            - secretRef:
+                name: connector-opssight-blackduck
+          image: 'blackducksoftware/blackduck-imageinspector-centos:5.0.1'
+        - resources:
+            requests:
+              cpu: 300m
+              memory: 1Gi
+            limits:
+              memory: 1Gi
+          terminationMessagePath: /dev/termination-log
+          name: imageinspector-ubuntu
+          command: ["java"]
+          args: ["-jar", "/opt/blackduck/blackduck-imageinspector/blackduck-imageinspector.jar", "--server.port=8082", "--current.linux.distro=ubuntu", "--inspector.port.alpine=8080", "--inspector.port.centos=8081", "--inspector.port.ubuntu=8082"]
+          securityContext:
+            privileged: false
+          ports:
+            - containerPort: 8082
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: var-images
+              mountPath: /var/images
+          terminationMessagePolicy: File
+          envFrom:
+            - secretRef:
+                name: connector-opssight-blackduck
+          image: 'blackducksoftware/blackduck-imageinspector-ubuntu:5.0.1'
+      serviceAccount: connector-opssight-image-getter
+      volumes:
+        - name: scanner
+          configMap:
+            name: connector-opssight-opssight
+            defaultMode: 420
+        - name: var-images
+          emptyDir: {}
+        - name: image-getter
+          configMap:
+            name: connector-opssight-opssight
+            defaultMode: 420
+      dnsPolicy: ClusterFirst
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600

@@ -1,0 +1,43 @@
+{
+  "Perceiver": {
+    "Certificate": "",
+    "CertificateKey": "",
+    "AnnotationIntervalSeconds": 30,
+    "DumpIntervalMinutes": 30,
+    "Port": 3002,
+    "Pod": {
+      "NamespaceFilter": ""
+    },
+    "Artifactory": {
+      "Dumper": false
+    }
+  },
+  "BlackDuck": {
+    "ConnectionsEnvironmentVariableName": "blackduck.json",
+    "TLSVerification": false
+  },
+  "Perceptor": {
+    "Timings": {
+      "CheckForStalledScansPauseHours": 999999,
+      "StalledScanClientTimeoutHours": 999999,
+      "ModelMetricsPauseSeconds": 15,
+      "UnknownImagePauseMilliseconds": 15000,
+      "ClientTimeoutMilliseconds": 100000
+    },
+    "UseMockMode": false,
+    "Host": "connector-opssight-core",
+    "Port": 3001
+  },
+  "Scanner": {
+    "Port": 3003,
+    "ImageDirectory": "/var/images",
+    "BlackDuckClientTimeoutSeconds":  600
+  },
+  "ImageFacade": {
+    "Host": "localhost",
+    "Port": 3004,
+    "ImagePullerType": "skopeo",
+    "CreateImagesOnly": false
+  },
+  "LogLevel": "debug"
+}

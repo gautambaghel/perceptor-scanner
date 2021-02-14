@@ -33,22 +33,22 @@ type DockerInspectorInfo struct {
 }
 
 // NewDockerInspectorInfo ...
-func NewDockerInspectorInfo(dockerInspectorVersion string, baseRepoURL string, rootPath string) *DockerInspectorInfo {
-	return &DockerInspectorInfo{DockerInspectorVersion: dockerInspectorVersion, BaseRepoURL: baseRepoURL, RootPath: rootPath}
+func NewDockerInspectorInfo(dockerInspectorVersion string, baseRepoURL string, rootPath string, hubVersion string) *DockerInspectorInfo {
+	return &DockerInspectorInfo{DockerInspectorVersion: dockerInspectorVersion, BaseRepoURL: baseRepoURL, RootPath: rootPath, HubVersion: hubVersion}
 }
 
 // DockerInspectorJarPath ...
-func (sci *DockerInspectorInfo) DockerInspectorJarPath() string {
-	return fmt.Sprintf("%s/dockerinspector-%s.jar", sci.RootPath, sci.DockerInspectorVersion)
+func (dii *DockerInspectorInfo) DockerInspectorJarPath() string {
+	return fmt.Sprintf("%s/dockerinspector-%s.jar", dii.RootPath, dii.DockerInspectorVersion)
 }
 
 // DockerInspectorJavaPath ...
-func (sci *DockerInspectorInfo) DockerInspectorJavaPath() string {
-	switch sci.OSType {
+func (dii *DockerInspectorInfo) DockerInspectorJavaPath() string {
+	switch dii.OSType {
 	case OSTypeLinux:
-		return fmt.Sprintf("%s/scan.cli-%s/jre/bin/java", sci.RootPath, sci.HubVersion)
+		return fmt.Sprintf("%s/scan.cli-%s/jre/bin/java", dii.RootPath, dii.HubVersion)
 	case OSTypeMac:
-		return fmt.Sprintf("%s/scan.cli-%s/jre/Contents/Home/bin/java", sci.RootPath, sci.HubVersion)
+		return fmt.Sprintf("%s/scan.cli-%s/jre/Contents/Home/bin/java", dii.RootPath, dii.HubVersion)
 	}
-	panic(fmt.Errorf("invalid os type: %d", sci.OSType))
+	panic(fmt.Errorf("invalid os type: %d", dii.OSType))
 }

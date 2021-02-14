@@ -1,4 +1,6 @@
 FROM centos:centos7
 
+COPY alpine.tar alpine.tar
+
 # Bring in other dependencies
-COPY ./perceptor-scanner ./perceptor-scanner
+COPY ./opssight-scanner ./opssight-scanner

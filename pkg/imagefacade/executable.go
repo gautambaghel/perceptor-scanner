@@ -24,7 +24,6 @@ package imagefacade
 import (
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -45,7 +44,7 @@ func RunImageFacade(configPath string, stop <-chan struct{}) {
 	}
 	log.SetLevel(level)
 
-	prometheus.Unregister(prometheus.NewProcessCollector(os.Getpid(), ""))
+	// prometheus.Unregister(prometheus.NewProcessCollector(os.Getpid(), ""))
 	prometheus.Unregister(prometheus.NewGoCollector())
 
 	imageFacade := NewImageFacade(config.ImageFacade.PrivateDockerRegistries, config.ImageFacade.CreateImagesOnly, config.ImageFacade.ImagePullerType, stop)

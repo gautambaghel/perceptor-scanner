@@ -24,7 +24,6 @@ package scanner
 import (
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -43,7 +42,7 @@ func RunScanner(configPath string, stop <-chan struct{}) {
 	}
 	log.SetLevel(level)
 
-	prometheus.Unregister(prometheus.NewProcessCollector(os.Getpid(), ""))
+	//prometheus.Unregister(prometheus.NewProcessCollector(os.Getpid(), ""))
 	prometheus.Unregister(prometheus.NewGoCollector())
 
 	manager, err := NewManager(config, stop)

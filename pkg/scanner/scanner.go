@@ -54,16 +54,16 @@ func (scanner *Scanner) ScanFullDockerImage(apiImage *api.ImageSpec) error {
 	image := common.NewImage(scanner.imageDirectory, pullSpec)
 	err := scanner.ifClient.PullImage(image)
 	if err != nil {
-		cleanUpFile(image.DockerTarFilePath())
+		//	cleanUpFile(image.DockerTarFilePath())
 		return errors.Trace(err)
 	}
-	defer cleanUpFile(image.DockerTarFilePath())
-	return scanner.ScanFile(apiImage.Scheme, apiImage.Domain, apiImage.Port, apiImage.User, apiImage.Password, image.DockerTarFilePath(), apiImage.BlackDuckProjectName, apiImage.BlackDuckProjectVersionName, apiImage.BlackDuckScanName)
+	// defer cleanUpFile(image.DockerTarFilePath())
+	return scanner.ScanFile(apiImage.Scheme, apiImage.Domain, apiImage.Port, apiImage.User, apiImage.Password, image.DockerTarFilePath(), apiImage.BlackDuckProjectName, apiImage.BlackDuckProjectVersionName, apiImage.BlackDuckScanName, scanner.imageDirectory)
 }
 
 // ScanFile runs the scan client against a single file
-func (scanner *Scanner) ScanFile(scheme string, host string, port int, username string, password string, path string, blackDuckProjectName string, blackDuckVersionName string, blackDuckScanName string) error {
-	return scanner.scanClient.Scan(scheme, host, port, username, password, path, blackDuckProjectName, blackDuckVersionName, blackDuckScanName)
+func (scanner *Scanner) ScanFile(scheme string, host string, port int, username string, password string, path string, blackDuckProjectName string, blackDuckVersionName string, blackDuckScanName string, imageDirectory string) error {
+	return scanner.scanClient.Scan(scheme, host, port, username, password, path, blackDuckProjectName, blackDuckVersionName, blackDuckScanName, imageDirectory)
 }
 
 // cleanUpFile cleans up the file that is locally pulled for scanning

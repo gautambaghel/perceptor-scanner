@@ -45,10 +45,10 @@ func DownloadDIClient(osType OSType, cliRootPath string, hubScheme string, hubHo
 	hubBaseURL := fmt.Sprintf("%s://%s:%d", hubScheme, hubHost, hubPort)
 	hubClient, err := hubclient.NewWithSession(hubBaseURL, hubclient.HubClientDebugTimings, timeout)
 	if err != nil {
-		return nil, errors.Annotatef(err, "unable to instantiate hub client")
+		return nil, errors.Annotatef(err, "DI: unable to instantiate hub client")
 	}
 
-	log.Infof("successfully instantiated hub client %s", hubBaseURL)
+	log.Infof("DI: successfully instantiated hub client %s", hubBaseURL)
 
 	// 2. log in to hub client
 	err = hubClient.Login(hubUser, hubPassword)
@@ -56,7 +56,7 @@ func DownloadDIClient(osType OSType, cliRootPath string, hubScheme string, hubHo
 		return nil, errors.Annotatef(err, "unable to log in to hub")
 	}
 
-	log.Info("successfully logged in to hub")
+	log.Info("DI: successfully logged in to hub")
 
 	// 3. get hub version
 	currentVersion, err := hubClient.CurrentVersion()
@@ -64,18 +64,18 @@ func DownloadDIClient(osType OSType, cliRootPath string, hubScheme string, hubHo
 		return nil, errors.Annotatef(err, "unable to get hub version")
 	}
 
-	log.Infof("got hub version: %s", currentVersion.Version)
+	log.Infof("DI: got hub version: %s", currentVersion.Version)
 
 	// 4. ping artifactory to get latest DI
 	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 	client := &http.Client{Transport: tr}
 
-	url = fmt.Sprintf("https://%s/api/storage/bds-integrations-release/com/synopsys/integration/blackduck-docker-inspector?properties=%s", baseRepoURL, dIVersionConstant)
+	url := fmt.Sprintf("https://%s/api/storage/bds-integrations-release/com/synopsys/integration/blackduck-docker-inspector?properties=%s", baseRepoURL, dIVersionConstant)
 
-	log.Infof("DI: Trying to get the latest docker inspector from ", url)
+	log.Infof("DI: Trying to get the latest docker inspector from %s", url)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Error in pinging artifactory server %e", err)
+		return nil, fmt.Errorf("DI: Error in pinging artifactory server %e", err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -91,7 +91,7 @@ func DownloadDIClient(osType OSType, cliRootPath string, hubScheme string, hubHo
 		}
 		pingResponseString = string(respBytes)
 	} else {
-		return nil, errors.New("Docker Inspector ping response not OK")
+		return nil, errors.New("DI: ping response not OK")
 	}
 
 	// 5. Extract Jar URL info from response
@@ -112,24 +112,24 @@ func DownloadDIClient(osType OSType, cliRootPath string, hubScheme string, hubHo
 		jarURL = jarURL[1 : len(jarURL)-1]
 	}
 
-	log.Infof("DI: Latest version of docker inspector downloading from ", jarURL)
+	log.Infof("DI: Latest version of docker inspector downloading from %s", jarURL)
 	// 6. Download DI Jar file
-	diInfo := NewDockerInspectorInfo(baseRepoURL, dIVersionConstant, cliRootPath, currentVersion.Version)
-	err = os.MkdirAll(cliInfo.RootPath, 0755)
+	diInfo := NewDockerInspectorInfo(dIVersionConstant, baseRepoURL, cliRootPath, currentVersion.Version)
+	err = os.MkdirAll(diInfo.RootPath, 0755)
 	if err != nil {
-		return nil, errors.Annotatef(err, "unable to make dir for DI %s", cliInfo.RootPath)
+		return nil, errors.Annotatef(err, "DI: unable to make dir for DI %s", diInfo.RootPath)
 	}
 
 	if jarURL == "" {
-		return nil, errors.New("Docker Inspector Jar URL is empty, something went wrong while retieving DI jar URL")
+		return nil, errors.New("DI: Jar URL is empty, something went wrong while retieving DI jar URL")
 	}
 
 	downloadPath := diInfo.DockerInspectorJarPath()
-	log.Infof("DI: Storing jar at ", downloadPath)
+	log.Infof("DI: Storing jar at %s", downloadPath)
 	downloadDIJar(downloadPath, jarURL)
 
 	// 7. we're done
-	return cliInfo, nil
+	return diInfo, nil
 }
 
 // DownloadScanClient downloads the Black Duck scan client
